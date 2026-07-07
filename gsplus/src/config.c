@@ -1349,7 +1349,8 @@ config_load_roms()
 			if(ret != len) {
 				fatal_printf("While reading card ROM %s, file "
 					"is too short. (%d) Expected %d bytes, "
-					"read %d bytes\n", errno, len, ret);
+					"read %d bytes\n", &g_cfg_tmp_path[0],
+					errno, len, ret);
 				continue;
 			}
 			close(fd);
