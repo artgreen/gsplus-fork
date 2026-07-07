@@ -406,8 +406,17 @@ unshk_parse_header(Disk *dsk, byte *cptr, int compr_size, byte *base_cptr)
 		return;
 	}
 	cptr += attrib_count;
+	if(cptr > cptr_end) {
+		printf("attrib_count %d runs off the buffer\n", attrib_count);
+		return;
+	}
 	filename_length = unshk_get_word2(&cptr[-2]);	// filename_length
 	cptr += filename_length;
+	if(cptr > cptr_end) {
+		printf("filename_length %d runs off the buffer\n",
+							filename_length);
+		return;
+	}
 	dptr = cptr + 16*total_threads;
 		// Each thread is 16 bytes, so the data is at +16*total_threads
 		// The data is in the same order as the header for the threads
@@ -430,6 +439,11 @@ unshk_parse_header(Disk *dsk, byte *cptr, int compr_size, byte *base_cptr)
 		if((thread_class == 2) && (thread_kind == 1)) {
 			// Disk image!
 			ucptr = malloc(thread_eof + 0x1000);
+			if(ucptr == 0) {
+				printf("unshk malloc of %d bytes failed\n",
+							thread_eof + 0x1000);
+				return;
+			}
 			unshk_data(dsk, dptr, comp_thread_eof, ucptr,
 					thread_eof, thread_format, base_cptr);
 			if(dsk->fd == 0) {

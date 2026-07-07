@@ -234,7 +234,7 @@ joystick_update_buttons()
 #endif
 #endif
 
-#ifdef MAC
+#if defined(MAC) && !defined(SDL_INPUT)
 # define JOYSTICK_DEFINED
 
 #include <IOKit/IOKitLib.h>
@@ -289,14 +289,14 @@ hid_device_callback(void *ptr, IOReturn result, void *sender,
 	}
 	if((usage_page == kHIDPage_GenericDesktop) &&
 						(usage == kHIDUsage_GD_X)) {
-		g_joystick_callback_x = ((ival * 65536) / g_joystick_range) -
-									32768;
+		g_joystick_callback_x = (((ival - g_joystick_min) * 65536) /
+						g_joystick_range) - 32768;
 		//printf("g_joystick_callback_x = %d\n", g_joystick_callback_x);
 	}
 	if((usage_page == kHIDPage_GenericDesktop) &&
 						(usage == kHIDUsage_GD_Y)) {
-		g_joystick_callback_y = ((ival * 65536) / g_joystick_range) -
-									32768;
+		g_joystick_callback_y = (((ival - g_joystick_min) * 65536) /
+						g_joystick_range) - 32768;
 		//printf("g_joystick_callback_y = %d\n", g_joystick_callback_y);
 	}
 	if((usage_page == kHIDPage_Button) && (usage >= 1) && (usage <= 10)) {

@@ -307,6 +307,10 @@ woz_add_track(Disk *dsk, int qtr_track, word32 tmap, dword64 dfcyc)
 			return 0;
 		}
 	} else {
+		if(((tmap * 8) + 8) > trks_size) {
+			printf("Trk %d is out of range!\n", tmap);
+			return 0;
+		}
 		bptr = &(wozptr[trks_offset + (tmap * 8)]);
 		// This is a TRK 8-byte structure
 		block = cfg_get_le16(&bptr[0]);		// Starting Block
