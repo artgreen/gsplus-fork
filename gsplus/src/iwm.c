@@ -2920,6 +2920,10 @@ disk_unix_to_nib(Disk *dsk, int qtr_track, dword64 dunix_pos, word32 unix_len,
 	if(unix_len > TRACK_BUF_LEN) {
 		printf("diks_unix_to_nib: requested len of image %s = %05x\n",
 			dsk->name_ptr, unix_len);
+		// Clamp to the track buffer: the read()/memcpy below fill
+		//  track_buf[TRACK_BUF_LEN], so an oversized (malformed) image
+		//  would otherwise smash the stack.
+		unix_len = TRACK_BUF_LEN;
 	}
 
 	bptr = dsk->raw_data;

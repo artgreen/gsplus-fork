@@ -549,7 +549,7 @@ do_read_c7(int unit_num, word32 buf, word32 blk)
 #endif
 		return 0x2f;
 	}
-	if(((blk + 1) * 0x200ULL) > (dimage_start + dimage_size)) {
+	if((((dword64)blk + 1) * 0x200ULL) > (dimage_start + dimage_size)) {
 		halt_printf("Tried to read past %08llx on disk (blk:%04x)\n",
 			dimage_start + dimage_size, blk);
 		smartport_error();
@@ -558,6 +558,14 @@ do_read_c7(int unit_num, word32 buf, word32 blk)
 
 	if(dsk->raw_data) {
 		// image was compressed and is in dsk->raw_data
+		// dimage_size can come from an image header (e.g. 2IMG) that
+		//  claims more than raw_data actually holds, so also bound the
+		//  access against the real allocation raw_dsize.
+		if((dimage_start + (blk*0x200ULL) + 0x200) > dsk->raw_dsize) {
+			halt_printf("Read past raw_data end (blk:%04x)\n", blk);
+			smartport_error();
+			return 0x27;
+		}
 		bptr = dsk->raw_data + dimage_start + (blk*0x200ULL);
 		for(i = 0; i < 0x200; i++) {
 			local_buf[i] = bptr[i];
@@ -685,7 +693,8 @@ smartport_memory_write(Disk *dsk, byte *bufptr, dword64 doffset, word32 size)
 	word32	ui;
 
 	bptr = dsk->raw_data;
-	if((bptr == 0) || ((doffset + size) > dsk->dimage_size)) {
+	if((bptr == 0) || ((doffset + size) > dsk->dimage_size) ||
+				((doffset + size) > dsk->raw_dsize)) {
 		printf("Write to %s failed, %08llx past end %08llx\n",
 			dsk->name_ptr, doffset, dsk->dimage_size);
 		return -1;
