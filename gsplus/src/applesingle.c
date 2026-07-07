@@ -216,7 +216,7 @@ applesingle_from_unix(Disk *dsk, Dynapro_file *fileptr, byte *fptr,
 	word32	key_block, blocks_used, entry_id, blocks_out, offset, length;
 	word32	magic, version, hdr_pos, did_fork;
 	int	num_entries;
-	int	i;
+	int	i, j;
 
 	// Return 0 if anything is wrong with the .applesingle file
 	// Otherwise, return (blocks_used << 16) | (key_block & 0xffff)
@@ -295,9 +295,9 @@ applesingle_from_unix(Disk *dsk, Dynapro_file *fileptr, byte *fptr,
 			bptr[8 + 18] = 0x12;
 			bptr[9] = 1;
 			bptr[9 + 18] = 2;
-			for(i = 0; i < 16; i++) {
-				bptr[10 + i] = fptr[offset + i];
-				bptr[10 + 18 + i] = fptr[offset + 16 + i];
+			for(j = 0; j < 16; j++) {
+				bptr[10 + j] = fptr[offset + j];
+				bptr[10 + 18 + j] = fptr[offset + 16 + j];
 			}
 			break;
 		case 11:	// ProDOS File Info

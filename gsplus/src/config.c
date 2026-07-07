@@ -1217,9 +1217,11 @@ cfg_load_charrom()
 	upos = g_cfg_charrom_pos * 0x1000U;
 	if(dsize < (upos + 0x1000)) {
 		g_cfg_charrom_pos = 0;
+		close(fd);
 		return;
 	}
 	dret = cfg_read_from_fd(fd, &buffer[0], upos, 4096);
+	close(fd);
 	if(dret != 0) {
 		prepare_a2_romx_font(&buffer[0]);
 	}
@@ -1259,6 +1261,7 @@ config_load_roms()
 	if(ret != 0) {
 		fatal_printf("fstat returned %d on fd %d, errno: %d\n",
 			ret, fd, errno);
+		close(fd);
 		g_config_control_panel = 1;
 		return;
 	}
@@ -1281,6 +1284,7 @@ config_load_roms()
 	} else {
 		fatal_printf("The ROM size should be 128K or 256K, this file "
 						"is %d bytes\n", len);
+		close(fd);
 		g_config_control_panel = 1;
 		return;
 	}
@@ -1288,6 +1292,7 @@ config_load_roms()
 	printf("Read: %d bytes of ROM\n", ret);
 	if(ret != len) {
 		fatal_printf("errno: %d\n", errno);
+		close(fd);
 		g_config_control_panel = 1;
 		return;
 	}
@@ -1349,7 +1354,9 @@ config_load_roms()
 			if(ret != len) {
 				fatal_printf("While reading card ROM %s, file "
 					"is too short. (%d) Expected %d bytes, "
-					"read %d bytes\n", errno, len, ret);
+					"read %d bytes\n", &g_cfg_tmp_path[0],
+					errno, len, ret);
+				close(fd);
 				continue;
 			}
 			close(fd);

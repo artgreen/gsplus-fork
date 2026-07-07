@@ -572,12 +572,20 @@ undeflate_dynamic_table(byte *cptr, word32 *bit_pos_ptr, byte *cptr_base)
 		if(val >= 0x10) {
 			entry = 0;
 			if(val == 0x10) {		// Repeat prev entry
-				entry = code_list[code_pos - 1];
 				if(!code_pos) {
 					printf("Got repeat code 0x10 at 0!\n");
 					return 0;
 				}
+				entry = code_list[code_pos - 1];
 			}
+		}
+		// code_list holds total_codes_needed (<= 320) entries; a code-18
+		//  run can ask for up to 138 repeats, so reject any repeat that
+		//  would write past the end rather than smashing the stack.
+		if((code_pos + repeat) > total_codes_needed) {
+			printf("Repeat count %d overflows code list at %d/%d\n",
+				repeat, code_pos, total_codes_needed);
+			return 0;
 		}
 		for(i = 0; i < (int)repeat; i++) {
 			code_list[code_pos] = entry;
@@ -693,12 +701,26 @@ undeflate_block(Disk *dsk, byte *cptr, word32 *bit_pos_ptr, byte *cptr_base,
 		bit_pos += 7;
 		cptr += (bit_pos >> 3);
 		*bit_pos_ptr = 0;
+		if((cptr + 4) > cptr_end) {
+			printf("Stored block header runs off the input\n");
+			return 0;
+		}
 		len = cptr[0] + (cptr[1] << 8);
+		tmp = cptr[2] + (cptr[3] << 8);		// NLEN, must be ~LEN
+		if((len ^ tmp) != 0xffff) {
+			printf("Stored block LEN/NLEN mismatch: %04x %04x\n",
+								len, tmp);
+			return 0;
+		}
+		cptr += 4;
+		if((cptr + len) > cptr_end) {
+			printf("Stored block of %d runs off the input\n", len);
+			return 0;
+		}
 		ucptr = undeflate_ensure_dest_len(dsk, 0, len);
 		if(!ucptr) {
 			return 0;
 		}
-		cptr += 4;
 		for(i = 0; i < (int)len; i++) {
 			*ucptr++ = *cptr++;
 		}
@@ -988,16 +1010,24 @@ undeflate_gzip(Disk *dsk, const char *name_str)
 	if((compr_dsize >> 31) != 0) {
 		// > 2GB...too big for this code
 		printf("gzip file is too large\n");
+		close(fd);
 		dsk->fd = -1;
 		return;
 	}
 	compr_size = (word32)compr_dsize;
 
 	cptr = malloc(compr_size + 0x1000);
+	if(cptr == 0) {
+		printf("gzip malloc of %d bytes failed\n", compr_size + 0x1000);
+		close(fd);
+		dsk->fd = -1;
+		return;
+	}
 	for(i = 0; i < 0x1000; i++) {
 		cptr[compr_size + i] = 0;
 	}
 	dret = cfg_read_from_fd(fd, cptr, 0, compr_size);
+	close(fd);
 	if(dret != compr_size) {
 		compr_size = 0;		// Make header searching fail
 	}
@@ -1123,6 +1153,11 @@ undeflate_zipfile(Disk *dsk, int fd, dword64 dlocal_header_off,
 	compr_doffset = dlocal_header_off + 30 + name_len + extra_len;
 
 	cptr = undeflate_malloc(compr_dsize + 0x1000);
+	if(cptr == 0) {
+		printf("zip malloc of %lld bytes failed\n",
+						compr_dsize + 0x1000);
+		return -1;
+	}
 	for(i = 0; i < 0x1000; i++) {
 		cptr[compr_dsize + i] = 0;
 	}
@@ -1292,6 +1327,11 @@ undeflate_zipfile_make_list(int fd)
 	}
 
 	dirptr = undeflate_malloc(dir_dsize);
+	if(dirptr == 0) {
+		printf("zip central-dir malloc of %lld bytes failed\n",
+								dir_dsize);
+		return 0;
+	}
 	dret = cfg_read_from_fd(fd, dirptr, dir_doff, dir_dsize);
 	if(dret != dir_dsize) {
 		printf("Couldn't read central dir\n");
@@ -1309,6 +1349,9 @@ undeflate_zipfile_make_list(int fd)
 #endif
 		if(ent >= entries) {
 			break;		// all done
+		}
+		if((pos + 46) > (int)dir_dsize) {
+			break;		// not enough bytes left for an entry
 		}
 		good = 1;
 		for(i = 0; i < 4; i++) {
@@ -1328,9 +1371,10 @@ undeflate_zipfile_make_list(int fd)
 		extra_len = cfg_get_le16(&dirptr[pos + 30]);
 		comment_len = cfg_get_le16(&dirptr[pos + 32]);
 		local_dheader = cfg_get_le32(&dirptr[pos + 42]);
-		if((pos + 46UL + name_len) > dir_dsize) {
+		if((pos + 46UL + name_len + extra_len) > dir_dsize) {
 			printf("Corrupt entry: pos:%04x, name_len:%04x, "
-				"dir_dsize:%05llx\n", pos, name_len, dir_dsize);
+				"extra_len:%04x, dir_dsize:%05llx\n", pos,
+				name_len, extra_len, dir_dsize);
 			break;
 		}
 
@@ -1381,7 +1425,7 @@ undeflate_zipfile_make_list(int fd)
 						add_it = 0;
 					}
 					tmp_off += 8;
-					bptr += 8;
+					bptr2 += 8;
 				}
 			}
 			ex_off += this_size;

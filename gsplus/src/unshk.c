@@ -64,14 +64,19 @@ unshk_calc_crc(byte *bptr, int size, word32 start_crc)
 int
 unshk_unrle(byte *cptr, int len, word32 rle_delim, byte *ucptr)
 {
-	byte	*start_ucptr;
+	byte	*start_ucptr, *end_ucptr;
 	word32	c;
 	int	outlen, count;
 	int	i;
 
 	// RLE is 3 bytes: { 0xdb, char, count}, where count==0 means output
 	//  one char.
+	// Each chunk decompresses to exactly 0x1000 bytes, so never write past
+	//  that: a malformed stream (e.g. all delimiter triples with count=0xff)
+	//  would otherwise emit up to ~700K into the 0x1000 slot -- a heap
+	//  overflow.  Bail with an error instead; the caller aborts the mount.
 	start_ucptr = ucptr;
+	end_ucptr = ucptr + 0x1000;
 	while(len > 0) {
 		c = *cptr++;
 		len--;
@@ -80,9 +85,17 @@ unshk_unrle(byte *cptr, int len, word32 rle_delim, byte *ucptr)
 			count = *cptr++;
 			len -= 2;
 			for(i = 0; i <= count; i++) {
+				if(ucptr >= end_ucptr) {
+					printf("RLE output overflowed 0x1000\n");
+					return 1;
+				}
 				*ucptr++ = c;
 			}
 		} else {
+			if(ucptr >= end_ucptr) {
+				printf("RLE output overflowed 0x1000\n");
+				return 1;
+			}
 			*ucptr++ = c;
 		}
 	}
@@ -393,8 +406,17 @@ unshk_parse_header(Disk *dsk, byte *cptr, int compr_size, byte *base_cptr)
 		return;
 	}
 	cptr += attrib_count;
+	if(cptr > cptr_end) {
+		printf("attrib_count %d runs off the buffer\n", attrib_count);
+		return;
+	}
 	filename_length = unshk_get_word2(&cptr[-2]);	// filename_length
 	cptr += filename_length;
+	if(cptr > cptr_end) {
+		printf("filename_length %d runs off the buffer\n",
+							filename_length);
+		return;
+	}
 	dptr = cptr + 16*total_threads;
 		// Each thread is 16 bytes, so the data is at +16*total_threads
 		// The data is in the same order as the header for the threads
@@ -417,6 +439,11 @@ unshk_parse_header(Disk *dsk, byte *cptr, int compr_size, byte *base_cptr)
 		if((thread_class == 2) && (thread_kind == 1)) {
 			// Disk image!
 			ucptr = malloc(thread_eof + 0x1000);
+			if(ucptr == 0) {
+				printf("unshk malloc of %d bytes failed\n",
+							thread_eof + 0x1000);
+				return;
+			}
 			unshk_data(dsk, dptr, comp_thread_eof, ucptr,
 					thread_eof, thread_format, base_cptr);
 			if(dsk->fd == 0) {

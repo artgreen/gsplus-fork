@@ -1306,6 +1306,10 @@ scc_add_to_readbufv(dword64 dfcyc, int port, const char *fmt, ...)
 
 	va_start(ap, fmt);
 	bufptr = malloc(4096);
+	if(bufptr == 0) {
+		va_end(ap);
+		return;
+	}
 	bufptr[0] = 0;
 	vsnprintf(bufptr, 4090, fmt, ap);
 	len = (int)strlen(bufptr);
@@ -1317,6 +1321,7 @@ scc_add_to_readbufv(dword64 dfcyc, int port, const char *fmt, ...)
 		scc_add_to_readbuf(dfcyc, port, c);
 	}
 	va_end(ap);
+	free(bufptr);
 }
 
 void

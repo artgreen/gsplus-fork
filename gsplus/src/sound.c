@@ -898,6 +898,12 @@ sound_mock_play(int pair, int channel, int *outptr, int *env_ptr,
 	int	out, ival, do_print;
 	int	i;
 
+	if(num_samps > MAX_MOCK_ENV_SAMPLES) {
+		// noise_ptr[]/env_ptr[] are only MAX_MOCK_ENV_SAMPLES long, and
+		//  the envelope/noise fillers bail at that size too; match them.
+		halt_printf("mock_play overflow!: %d\n", num_samps);
+		return;
+	}
 	if((g_mockingboard.disable_mask >> ((pair * 3) + channel)) & 1) {
 		// This channel is disabled
 		return;

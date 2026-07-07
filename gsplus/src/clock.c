@@ -164,11 +164,11 @@ clk_bram_zero()
 void
 clk_bram_set(int bram_num, int offset, int val)
 {
-	if((bram_num < 0) || (bram_num > 2)) {
+	if((bram_num < 0) || (bram_num >= 2)) {
 		printf("bram_num %d out of range\n", bram_num);
 		return;
 	}
-	if((offset < 0) || (offset > 0x100)) {
+	if((offset < 0) || (offset >= 0x100)) {
 		printf("bram offset %05x out of range\n", offset);
 		return;
 	}
