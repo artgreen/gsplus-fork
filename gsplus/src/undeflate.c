@@ -572,12 +572,20 @@ undeflate_dynamic_table(byte *cptr, word32 *bit_pos_ptr, byte *cptr_base)
 		if(val >= 0x10) {
 			entry = 0;
 			if(val == 0x10) {		// Repeat prev entry
-				entry = code_list[code_pos - 1];
 				if(!code_pos) {
 					printf("Got repeat code 0x10 at 0!\n");
 					return 0;
 				}
+				entry = code_list[code_pos - 1];
 			}
+		}
+		// code_list holds total_codes_needed (<= 320) entries; a code-18
+		//  run can ask for up to 138 repeats, so reject any repeat that
+		//  would write past the end rather than smashing the stack.
+		if((code_pos + repeat) > total_codes_needed) {
+			printf("Repeat count %d overflows code list at %d/%d\n",
+				repeat, code_pos, total_codes_needed);
+			return 0;
 		}
 		for(i = 0; i < (int)repeat; i++) {
 			code_list[code_pos] = entry;

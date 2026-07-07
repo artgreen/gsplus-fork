@@ -64,14 +64,19 @@ unshk_calc_crc(byte *bptr, int size, word32 start_crc)
 int
 unshk_unrle(byte *cptr, int len, word32 rle_delim, byte *ucptr)
 {
-	byte	*start_ucptr;
+	byte	*start_ucptr, *end_ucptr;
 	word32	c;
 	int	outlen, count;
 	int	i;
 
 	// RLE is 3 bytes: { 0xdb, char, count}, where count==0 means output
 	//  one char.
+	// Each chunk decompresses to exactly 0x1000 bytes, so never write past
+	//  that: a malformed stream (e.g. all delimiter triples with count=0xff)
+	//  would otherwise emit up to ~700K into the 0x1000 slot -- a heap
+	//  overflow.  Bail with an error instead; the caller aborts the mount.
 	start_ucptr = ucptr;
+	end_ucptr = ucptr + 0x1000;
 	while(len > 0) {
 		c = *cptr++;
 		len--;
@@ -80,9 +85,17 @@ unshk_unrle(byte *cptr, int len, word32 rle_delim, byte *ucptr)
 			count = *cptr++;
 			len -= 2;
 			for(i = 0; i <= count; i++) {
+				if(ucptr >= end_ucptr) {
+					printf("RLE output overflowed 0x1000\n");
+					return 1;
+				}
 				*ucptr++ = c;
 			}
 		} else {
+			if(ucptr >= end_ucptr) {
+				printf("RLE output overflowed 0x1000\n");
+				return 1;
+			}
 			*ucptr++ = c;
 		}
 	}
